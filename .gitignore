@@ -4,3 +4,8 @@ composer.phar
 composer.lock
 .DS_Store
 .idea
+.direnv
+.php-cs-fixer.cache
+.phpunit.result.cache
+.phpunit.cache
+.pre-commit-config.yaml

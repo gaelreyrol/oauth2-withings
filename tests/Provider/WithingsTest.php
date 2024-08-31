@@ -1,26 +1,23 @@
 <?php
 
-namespace waytohealth\OAuth2\Client\Test\Provider;
+namespace WayToHealth\Tests\Provider;
 
-use waytohealth\OAuth2\Client\Provider\Withings;
+use GuzzleHttp\ClientInterface;
+use GuzzleHttp\Psr7\Utils;
+use League\OAuth2\Client\Provider\Exception\IdentityProviderException;
+use PHPUnit\Framework\TestCase;
+use Psr\Http\Message\RequestInterface;
+use Psr\Http\Message\ResponseInterface;
+use WayToHealth\OAuth2\Client\Provider\Withings;
 use League\OAuth2\Client\Token\AccessToken;
 use Mockery;
-use PHPUnit_Framework_TestCase as TestCase;
-use Psr\Http\Message\ResponseInterface;
-use Psr\Http\Message\RequestInterface;
 
 class WithingsTest extends TestCase
 {
-    public static function callMethod($obj, $name, array $args) {
-        $class = new \ReflectionClass($obj);
-        $method = $class->getMethod($name);
-        $method->setAccessible(true);
-        return $method->invokeArgs($obj, $args);
-    }
+    private Withings $provider;
+    private AccessToken $token;
 
-    protected $provider;
-
-    protected function setUp()
+    protected function setUp(): void
     {
         $this->provider = new Withings([
             'clientId' => 'mock_client_id',
@@ -30,17 +27,17 @@ class WithingsTest extends TestCase
 
         $this->token = new AccessToken([
             'access_token' => 'mock_token',
-            'expires_in' => 10000
+            'expires_in' => 10000,
         ]);
 
     }
 
-    public function tearDown()
+    public function tearDown(): void
     {
         parent::tearDown();
     }
 
-    public function testAuthorizationUrl()
+    public function testAuthorizationUrl(): void
     {
         $url = $this->provider->getAuthorizationUrl(['prompt' => 'mock_prompt']);
         $uri = parse_url($url);
@@ -56,23 +53,23 @@ class WithingsTest extends TestCase
         $this->assertNotNull($this->provider->getState());
     }
 
-    public function testScopes()
+    public function testScopes(): void
     {
         $scopes = ['user.info', 'user.metrics', 'user.activity'];
 
         $url = $this->provider->getAuthorizationUrl();
         $uri = parse_url($url);
-        $this->assertContains(urlencode(implode(',', $scopes)), $url);
+        $this->assertStringContainsString(urlencode(implode(',', $scopes)), $url);
     }
 
-    public function testGetAuthorizationUrl()
+    public function testGetAuthorizationUrl(): void
     {
         $url = $this->provider->getAuthorizationUrl();
         $uri = parse_url($url);
         $this->assertEquals('/oauth2_user/authorize2', $uri['path']);
     }
 
-    public function testGetBaseAccessTokenUrl()
+    public function testGetBaseAccessTokenUrl(): void
     {
         $params = [];
         $url = $this->provider->getBaseAccessTokenUrl($params);
@@ -80,7 +77,7 @@ class WithingsTest extends TestCase
         $this->assertEquals('/v2/oauth2', $uri['path']);
     }
 
-    public function testGetResourceOwnerDetailsUrl()
+    public function testGetResourceOwnerDetailsUrl(): void
     {
         $url = $this->provider->getResourceOwnerDetailsUrl($this->token);
         $uri = parse_url($url);
@@ -88,70 +85,76 @@ class WithingsTest extends TestCase
         $this->assertEquals('action=getdevice&access_token=mock_token', $uri['query']);
     }
 
-    public function testGetAccessToken()
+    public function testGetAccessToken(): void
     {
-        $response = Mockery::mock('Psr\Http\Message\ResponseInterface');
-        $response->shouldReceive('getBody')->andReturn('{"status":0, "body":{"access_token":"mock_access_token", "token_type":"Bearer", "scope":"identify", "refresh_token":"mock_refresh_token", "user_id":"mock_user_id"}}');
-        $response->shouldReceive('getHeader')->andReturn(['content-type' => 'json']);
-        $response->shouldReceive('getStatusCode')->andReturn(200);
-        $client = Mockery::mock('GuzzleHttp\ClientInterface');
-        $client->shouldReceive('send')->times(1)->andReturn($response);
+        $response = Mockery::mock(ResponseInterface::class);
+        $response->allows('getBody')
+            ->andReturns(Utils::streamFor('{"status":0, "body":{"access_token":"mock_access_token", "token_type":"Bearer", "scope":"identify", "refresh_token":"mock_refresh_token", "user_id":"mock_user_id"}}'));
+        $response->allows('getHeader')
+            ->andReturns(['content-type' => 'json']);
+        $response->allows('getStatusCode')
+            ->andReturns(200);
+
+        $client = Mockery::mock(ClientInterface::class);
+        $client->expects('send')->once()->andReturns($response);
+
         $this->provider->setHttpClient($client);
         $token = $this->provider->getAccessToken('authorization_code', ['code' => 'mock_authorization_code']);
+
         $this->assertEquals('mock_access_token', $token->getToken());
         $this->assertEquals('mock_refresh_token', $token->getRefreshToken());
         $this->assertNull($token->getExpires());
         $this->assertNull($token->getResourceOwnerId());
     }
 
-    public function testParsedResponseSuccess()
+    public function testParsedResponseSuccess(): void
     {
         // When we have a successful response, we return the parsed response
         $successResponse = <<<RESPONSE
-{
-    "status": 0,
-    "body": {
-        "appli": 0,
-        "callbackurl": "string",
-        "expires": "string",
-        "comment": "string"
-    }
-}
-RESPONSE;
+            {
+                "status": 0,
+                "body": {
+                    "appli": 0,
+                    "callbackurl": "string",
+                    "expires": "string",
+                    "comment": "string"
+                }
+            }
+        RESPONSE;
 
-        $request = Mockery::mock(\Psr\Http\Message\RequestInterface::class);
+        $request = Mockery::mock(RequestInterface::class);
 
-        $response = Mockery::mock('Psr\Http\Message\ResponseInterface');
-        $response->shouldReceive('getBody')->andReturn($successResponse);
-        $response->shouldReceive('getHeader')->andReturn('');
+        $response = Mockery::mock(ResponseInterface::class);
+        $response->allows('getBody')->andReturns(Utils::streamFor($successResponse));
+        $response->allows('getHeader')->andReturns([]);
 
-        $client = Mockery::mock('GuzzleHttp\ClientInterface');
-        $client->shouldReceive('send')->times(1)->andReturn($response);
+        $client = Mockery::mock(ClientInterface::class);
+        $client->expects('send')->once()->andReturns($response);
         $this->provider->setHttpClient($client);
 
         $responseBody = $this->provider->getParsedResponse($request)['body'];
         $this->assertEquals($responseBody['expires'], "string");
     }
 
-    public function testParsedResponseFailure()
+    public function testParsedResponseFailure(): void
     {
         // When the API responds with an error, we throw an exception
         // $this->expectException(\League\OAuth2\Client\Provider\Exception\IdentityProviderException::class);
 
-        $request = Mockery::mock(\Psr\Http\Message\RequestInterface::class);
+        $request = Mockery::mock(RequestInterface::class);
 
-        $response = Mockery::mock('Psr\Http\Message\ResponseInterface');
-        $response->shouldReceive('getBody')->andReturn('{"status":503,"error":"Invalid params"}');
-        $response->shouldReceive('getHeader')->andReturn('');
+        $response = Mockery::mock(ResponseInterface::class);
+        $response->allows('getBody')->andReturns(Utils::streamFor('{"status":503,"error":"Invalid params"}'));
+        $response->allows('getHeader')->andReturns([]);
 
-        $client = Mockery::mock('GuzzleHttp\ClientInterface');
-        $client->shouldReceive('send')->times(1)->andReturn($response);
+        $client = Mockery::mock(ClientInterface::class);
+        $client->expects('send')->once()->andReturns($response);
         $this->provider->setHttpClient($client);
 
         try {
             $this->provider->getParsedResponse($request);
             $this->fail('An exception should have been thrown');
-        } catch (\League\OAuth2\Client\Provider\Exception\IdentityProviderException $e) {
+        } catch (IdentityProviderException $e) {
             $this->assertEquals('Invalid params', $e->getMessage());
             $this->assertEquals(503, $e->getCode());
             // make sure response body is the parsed body
@@ -162,23 +165,22 @@ RESPONSE;
         }
     }
 
-    public function testCreateResourceOwner()
+    public function testCreateResourceOwner(): void
     {
         $resourceOwner = $this->provider->createResourceOwner(
-            ['userid' => 'value'], $this->token
+            ['userid' => 'value'],
+            $this->token
         );
 
-        $this->assertEquals($resourceOwner->getId(), 'value');
+        $this->assertEquals('value', $resourceOwner->getId());
     }
 
-    public function testRevoke()
+    public function testRevoke(): void
     {
-        $client = Mockery::spy('GuzzleHttp\ClientInterface');
+        $client = Mockery::spy(ClientInterface::class);
         $this->provider->setHttpClient($client);
 
-        $this->provider->revoke($this->token);
-
-        $client->shouldHaveReceived('send')->with(
+        $client->expects('send')->once()->with(
             Mockery::on(function ($argument) {
                 $uri = $argument->getUri();
                 $path = $uri->getPath() === "/notify";
@@ -186,6 +188,10 @@ RESPONSE;
                 return $path && $query;
             })
         );
+
+        $this->provider->revoke($this->token);
+
+        $this->expectNotToPerformAssertions();
     }
 
 }
