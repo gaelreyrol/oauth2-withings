@@ -10,15 +10,13 @@ jobs:
         operating-system:
           - ubuntu-latest
           # - windows-latest # Disabled - apparently checkouts have \r\n which breaks phpcs
-          - macos-latest
+          # - macos-latest
         php-versions:
-          - '7.2'
-          - '7.3'
-          - '7.4'
+          - '8.3'
     name: PHP ${{ matrix.php-versions }} Test on ${{ matrix.operating-system }}
     steps:
     - name: Checkout
-      uses: actions/checkout@v2
+      uses: actions/checkout@v4
 
     - name: Setup PHP
       uses: shivammathur/setup-php@v2
@@ -35,13 +33,13 @@ jobs:
       run: ./vendor/bin/phpunit
 
     - name: parallel-lint
-      run: ./vendor/bin/parallel-lint src test
+      run: ./vendor/bin/parallel-lint src tests
 
     - name: php-cs-fixer
-      run: ./vendor/bin/php-cs-fixer fix src --rules=@PSR2
+      run: ./vendor/bin/php-cs-fixer fix src --rules=@PSR12
 
     - name: phpcs
-      run: ./vendor/bin/phpcs src --standard=psr2 -sp
+      run: ./vendor/bin/phpcs src --standard=psr12 -sp
 
     - name: phpstan
-      run: ./vendor/bin/phpstan analyze src --level 5
+      run: ./vendor/bin/phpstan analyze src --level 6

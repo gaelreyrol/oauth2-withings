@@ -31,8 +31,8 @@ We accept contributions via Pull Requests on [Github](https://github.com/waytohe
 The following tests must pass for a build to be considered successful. If contributing, please ensure these pass before submitting a pull request.
 
 ``` bash
-$ ./vendor/bin/php-cs-fixer fix src --level=psr2
-$ ./vendor/bin/phpcs src --standard=psr2 -sp
+$ ./vendor/bin/php-cs-fixer fix src --level=psr12
+$ ./vendor/bin/phpcs src --standard=psr12 -sp
 $ ./vendor/bin/parallel-lint src test
 $ ./vendor/bin/phpunit --coverage-text test
 ```
